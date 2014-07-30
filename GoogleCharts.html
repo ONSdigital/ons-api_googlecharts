@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<!-- This code example is provided by the Office for National Statistics under the terms of the Open Government Licence http://www.nationalarchives.gov.uk/doc/open-government-licence/ -->
+<head>
+    <meta http-equiv="Content-Type" content="text/html; UTF-8" />
+    <title>Google Visualisation</title>
+
+    <!-- documentation for Google Charts API at https://developers.google.com/chart/ -->
+    <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+
+
+    <!-- JSON manipulation functions -->
+    <script type="text/javascript" src="jsonutils.js"></script>
+
+    <!-- Google and Web Service scripts -->
+    <script type="text/javascript">
+    var wrapper;
+    var dataTable;
+    var tabData;
+    var chartData;
+    var dims;
+    var chosenArea;
+    var hierarchy = "2011WARDH";
+        
+    <!-- insert your API Key here -->
+    var endpoint =  "http://data.ons.gov.uk";
+    var APIKey = "YOUR_KEY_HERE";
+
+    // Load the Visualization API and the piechart package.
+    google.load('visualization', '1', {
+        'packages': ['table', 'corechart', 'charteditor']
+    });
+
+    // Set a callback to run when the Google Visualization API is loaded.
+    google.setOnLoadCallback(loaded);
+
+    function loaded() {
+        document.getElementById('jsonTextArea').value =
+            'Choose indicator and areas \nthen press Create Table and Chart \n(Detailed Characteristics table not currently available)';
+        document.getElementById('createTableBtn').disabled = false;
+    }
+
+    function openEditor() {
+        // Handler for the "Open Editor" button.
+        var editor = new google.visualization.ChartEditor();
+        google.visualization.events.addListener(editor, 'ok', function () {
+            wrapper = editor.getChartWrapper();
+            wrapper.draw(document.getElementById('visualization'));
+        });
+        editor.openDialog(wrapper);
+    }
+
+    // routine to call the API using XMLHttp  
+    function RestfulResource(resource_url) {
+        this.resource_url = resource_url;
+        this.xmlhttp = null;
+
+        if (window.XMLHttpRequest) {
+            this.xmlhttp = new XMLHttpRequest();
+        } else {
+            this.xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+        if (this.xmlhttp == null) {
+            alert("Your browser doesn't support XMLHttpRequests.");
+        }
+
+        this.retrieve = function () {
+            var url = this.resource_url;
+            var self = this;
+            this.xmlhttp.open("GET", url, true);
+            //	this.xmlhttp.setRequestHeader("Cache-Control", "no-cache");  
+            this.xmlhttp.onreadystatechange = function () {
+                if (self.xmlhttp.readyState == 4) {
+                    if (self.xmlhttp.status == 200) {
+                        //	alert(self.xmlhttp.status);                 
+                        self.onRetrieveSuccess.call(self, self.xmlhttp.responseText);
+                    } else {
+                        alert(self.xmlhttp.status + " " + self.xmlhttp.statusText);
+                        self.onRetrieveError.call(self, self.xmlhttp.statusText);
+                    }
+                }
+            };
+
+
+            this.xmlhttp.withCredentials = true;
+            this.xmlhttp.send(null);
+        };
+
+        /** The method called when a resource is successfully retrieved.*/
+        this.onRetrieveSuccess = function (responseText) {
+            alert("override the function onRetrieveSuccess");
+        };
+
+        /** The method called when a resource is not created.*/
+        this.onRetrieveError = function (statusText) {
+            alert("override the function onRetrieveError");
+        };
+    }
+
+  
+    // reset button to start again
+    function reset() {
+        var jsonTA = document.getElementById('jsonTextArea');
+        jsonTA.value =
+            'Choose indicator and areas \nthen press Create Table and Chart \n(Detailed Characteristics table not currently available)';
+        var jsonDiv = document.getElementById('jsonDiv');
+        jsonDiv.style.display = '';
+        var chartDiv = document.getElementById('tablediv');
+        var nodeList = chartDiv.childNodes;
+        for (var id = 0; id < nodeList.length; id++) {
+            chartDiv.removeChild(nodeList.item(id));
+        }
+        var chartDiv2 = document.getElementById('chartdiv');
+        var nodeList2 = chartDiv2.childNodes;
+        for (var id = 0; id < nodeList2.length; id++) {
+            chartDiv2.removeChild(nodeList2.item(id));
+        }
+        document.getElementById('createTableBtn').disabled = false;
+    }
+
+
+    // start point when user clicks create table and chart
+    function go() {
+        var selectedDatasetName = document.getElementById('selectDS').value;
+        var selectedAreaCode = document.getElementById('selectedarea').value;
+
+            // construct API call    
+            var url = endpoint + "/ons/api/data/dataset/" +
+                selectedDatasetName + "&apikey=" + APIKey + "&dm/" + hierarchy + "=" + selectedAreaCode;
+            document.getElementById('jsonTextArea').value = " Calling: " +
+                url +
+                "\n please wait...";
+            var resource = new RestfulResource(url);
+
+            // define function to take place only on successful completion of the API call    
+            resource.onRetrieveSuccess = function (responseText) {
+                createTable(responseText)
+            }
+            // call the API
+            resource.retrieve();
+    }
+
+    function createTable(responseText) {
+
+        // save JSON response to HTML page
+        document.getElementById('jsonTextArea').value = responseText;
+
+        // validate JSON
+        var jsonObject = validateJson(false);
+        if (jsonObject == null) {
+            return;
+        }
+
+        // make google data object from JSON using external jsonutils.js file  
+        var googleUtils = new GoogleVisUtils(jsonObject);
+        var visualisationData = googleUtils.convertDatasetToJson();
+
+        // create table using data
+        var chart = new google.visualization.Table(document.getElementById('tablediv'));
+        dataTable = new google.visualization.DataTable(visualisationData, 0.6);
+
+        // could subset the data in the table here
+        var tabView = new google.visualization.DataView(dataTable);
+	
+	  if (hierarchy == "2011HTWARDH")
+      {     
+	 // in this case remove sex column        
+	    tabView.hideColumns([2]);
+        tabData = tabView.toDataTable();
+        tabData.sort([{column: 1}, {column: 2}]);
+       }
+        else
+      {
+        // for simpler table use whole dataset
+        tabData = tabView.toDataTable();
+         tabData.sort([{column: 2, desc:true}]);
+       }
+        
+        var jsonDiv = document.getElementById('jsonDiv');
+        jsonDiv.style.display = 'none';
+        chart.draw(tabData, {
+            width: 1000,
+            height: 800,
+            alternatingRowStyle: true,
+            is3D: true,
+            title: 'Census Data'
+        });
+        document.getElementById('tablediv').style.visibility = 'visible';
+
+       // now create the chart, first subset the data
+	  var chartView = new google.visualization.DataView(tabData);
+        var selectedChartName = document.getElementById('selectChart').value;
+        var myTitle = "Census Chart";
+        var myChartType = "ColumnChart";
+               
+        if (hierarchy == "2011HTWARDH")
+        {         
+           // pie chart of all ages
+           if (selectedChartName == '1') {
+              chartView.hideColumns([0, 1]);
+              chartView.setRows([211, 212, 213, 214, 215, 216, 217, 218, 219]);
+              myTitle = "Religion for All Ages: " + chosenArea;
+              myChartType = "PieChart";
+          }
+
+         // column chart of Christians
+          if (selectedChartName == '2') {
+              chartView.hideColumns([0, 2]);
+              myTitle = "Christians by Age: " + chosenArea;
+              chartView.setRows([52, 62, 72, 82, 92, 102, 122, 132, 142, 152, 162, 172, 192]);
+              myChartType = "ColumnChart";
+          }
+ 
+         // line chart of Moslems        
+          if (selectedChartName == '3') {
+              chartView.hideColumns([0, 2]);
+              chartView.setRows([55, 65, 75, 85, 95, 105, 125, 135, 145, 155, 165, 175, 195]);
+              myTitle = "Moslems by Age: " + chosenArea;
+              myChartType = "LineChart";
+          }
+		}
+		else
+		{
+		      chartView.hideColumns([0]);
+              chartView.hideRows([0]);
+              myTitle = "Religion for All Ages: " + chosenArea;
+              myChartType = "PieChart";
+		}
+
+        chartData = chartView.toDataTable();
+
+        // create the chart using ChartWrapper 
+        wrapper = new google.visualization.ChartWrapper({
+            dataTable: chartData,
+            containerId: 'chartdiv',
+            chartType: myChartType
+        });
+        wrapper.setOptions({
+            'title': myTitle,
+            'vAxis': {
+                'title': 'People'
+            }
+        });
+        wrapper.draw();
+
+        document.getElementById('createTableBtn').disabled = 'disabled';
+    }
+    
+function setHierarchy()
+{
+    var selectedDatasetName = document.getElementById('selectDS').value;
+    if (selectedDatasetName.indexOf("2011HTWARDH") > 0)
+    {
+		hierarchy = "2011HTWARDH";
+    }
+    else
+    {
+		hierarchy = "2011WARDH";
+    }
+    alert(hierarchy);
+}    
+    
+    </script>
+</head>
+
+<body>
+    <input id="createTableBtn" type="button" onclick="go();" disabled="disabled" value="Create Table and Chart"
+    title="Create the Google Visualisation Data Table." />
+    <input id="resetBtn" type="button" onclick="reset();" value="Reset" title="Clear the text area."
+    />
+    <input type="button" onclick="openEditor()" value="Chart Editor" />
+    <br />
+    <div id="jsonDiv">
+        <br/>
+        <font face="helvetica, verdana, arial" size="2">Table:</font>&nbsp;
+        <select id="selectDS" onchange="setHierarchy()">
+         <option value="QS208EW.json?context=Census&geog=2011WARDH&geog=2011WARDH&totals=false">QS208EW Religion (Ward Hierarchy)</option>
+         <option value="DC2107EW.json?context=Census&geog=2011HTWARDH&geog=2011HTWARDH&totals=false&dm/CL_0000123=CI_0000139" disabled>DC2107EW Religion by Age by Sex (HT Ward Hierarchy)</option>
+
+        </select>
+        &nbsp;<font face="helvetica, verdana, arial" size="2">Area Code:</font>&nbsp;
+        <input id="selectedarea" type="text" name="selectedarea" size="10" maxlength="10"
+        value="E06000045">
+        <br/>
+        <br/>
+        <font face="helvetica, verdana, arial" size="2">Chart:</font>&nbsp;
+        <select id="selectChart">
+            <option value="1" >Religion for All Ages</option>
+            <option value="2" disabled >Christians by Age</option>
+            <option value="3" disabled >Moslems by Age</option>
+        </select>
+        <br/>
+        <br/>
+        <textarea id="jsonTextArea" rows="4" cols="80"></textarea>
+    </div>
+    <!--Div that will hold the chart-->
+    <div id='chartdiv' style="width:880px;height:440px">
+    </div>
+    <br />
+    <!--Div that will hold the tablet-->
+    <div id="tablediv"></div>
+</body>
+
+</html>
