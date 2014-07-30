@@ -12,3 +12,4 @@ There are two versions of the demo provided, one uses the SDMX-like JSON output 
 
 
 ![Screenshot](https://raw.githubusercontent.com/ONSdigital/ons-api_googlecharts/master/screenshot.jpg "Screenshot")
+![Screenshot](https://raw.githubusercontent.com/ONSdigital/ons-api_googlecharts/master/screenshot2.jpg "Screenshot")
